@@ -1,373 +1,547 @@
-# app.py
+# app.py - Meta-Learning Business Intelligence Command Center
 import streamlit as st
 import pandas as pd
-import io
-from PIL import Image
+import plotly.graph_objects as go
+import plotly.express as px
+from datetime import datetime, timedelta
+import json
 import os
 import sys
-import base64
-
-# Try to import optional dependencies
-try:
-    import qrcode
-    QRCODE_AVAILABLE = True
-except ImportError:
-    QRCODE_AVAILABLE = False
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(__file__))
 
-from knowledge_base import RAG_SYSTEM
-from core_engine import create_meta_learning_system, DataCombiner, LLMAnalyzer, ResultsWriter
+try:
+    from knowledge_base import RAG_SYSTEM
+    from core_engine import create_meta_learning_system, DataCombiner, LLMAnalyzer, ResultsWriter
+    RAG_AVAILABLE = True
+except ImportError:
+    RAG_AVAILABLE = False
+    # Fallback responses for demo
+    RAG_SYSTEM = None
 
 # Page config
 st.set_page_config(
-    page_title="🚀 Meta-Learning Business Intelligence Engine",
-    page_icon="🚀",
-    layout="wide"
+    page_title="🌟 Intelligence Command Center",
+    page_icon="🌟",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Command Center styling
+# Custom CSS for Enterprise Command Center
 st.markdown("""
 <style>
-    .command-center {
+    .main-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 20px;
-        border-radius: 10px;
+        padding: 30px;
+        border-radius: 15px;
         margin-bottom: 20px;
+        text-align: center;
+    }
+    .header-welcome {
+        color: white;
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+    .header-subtitle {
+        color: rgba(255,255,255,0.9);
+        font-size: 1.1rem;
+    }
+    .status-indicator {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 12px;
+        border-left: 5px solid #28a745;
+        margin: 10px 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .metric-card {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border-left: 4px solid #667eea;
+        margin: 15px 0;
+    }
+    .chart-container {
+        background: white;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin: 10px 0;
+    }
+    .prediction-box {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 10px 0;
+    }
+    .quick-actions {
         background: #f8f9fa;
         padding: 15px;
         border-radius: 8px;
-        border-left: 4px solid #667eea;
         margin: 10px 0;
     }
-    .qa-button {
-        background: #667eea;
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 5px;
-        margin: 5px;
+    .ai-prompt {
+        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        padding: 15px;
+        border-radius: 8px;
+        margin: 8px 0;
         cursor: pointer;
+        transition: transform 0.2s;
     }
-    .qa-button:hover {
-        background: #5a67d8;
+    .ai-prompt:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-    .progress-container {
-        background: #f0f2f6;
-        padding: 10px;
-        border-radius: 5px;
-        margin: 10px 0;
+    .ai-response {
+        background: #e8f4fd;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 4px solid #667eea;
+        margin: 15px 0;
+    }
+    .roadmap-item {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 8px 0;
+        border-left: 4px solid #ffc107;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .dropdown-content {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 10px;
+        border-left: 3px solid #6c757d;
     }
 </style>
 """, unsafe_allow_html=True)
 
-def generate_qr_code_safe(url):
-    """Generate QR code safely with error handling"""
-    if not QRCODE_AVAILABLE:
-        return None, "QR code library not available"
+# Generate mock business data for realistic charts
+def generate_business_data():
+    # All-time data (2022-2024)
+    dates_2022_2024 = pd.date_range('2022-01-01', '2024-12-31', freq='M')
     
-    try:
-        qr = qrcode.QRCode(version=1, box_size=10, border=4)
-        qr.add_data(url)
-        qr.make(fit=True)
-        
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        # Convert to bytes for Streamlit
-        img_bytes = io.BytesIO()
-        img.save(img_bytes, format='PNG')
-        img_bytes.seek(0)
-        
-        return img_bytes, None
-        
-    except Exception as e:
-        return None, f"QR generation failed: {str(e)}"
+    # Revenue data with growth trend
+    base_revenue = 1800000
+    revenue_growth = 0.035  # 3.5% monthly growth
+    revenue_data = []
+    for i, date in enumerate(dates_2022_2024):
+        revenue = base_revenue * (1 + revenue_growth) ** i
+        # Add some noise
+        noise = 0.15 * revenue * (pd.random.random() - 0.5)
+        revenue_data.append(max(revenue + noise, 1000000))
+    
+    # Customer retention data (improving trend)
+    retention_start = 0.75
+    retention_improvement = 0.015  # 1.5% improvement per quarter
+    retention_data = []
+    for i, date in enumerate(dates_2022_2024):
+        quarter = i // 3
+        retention = min(retention_start + (retention_improvement * quarter), 0.92)
+        # Add noise
+        noise = 0.02 * (pd.random.random() - 0.5)
+        retention_data.append(max(min(retention + noise, 0.95), 0.70))
+    
+    # Processing efficiency data (improving)
+    processing_start = 2.3
+    processing_improvement = 0.1  # 0.1s improvement per quarter
+    processing_data = []
+    for i, date in enumerate(dates_2022_2024):
+        quarter = i // 3
+        processing_time = max(processing_start - (processing_improvement * quarter), 1.0)
+        # Add noise
+        noise = 0.3 * (pd.random.random() - 0.5)
+        processing_data.append(max(processing_time + noise, 0.8))
+    
+    return {
+        'revenue': pd.DataFrame({
+            'date': dates_2022_2024,
+            'revenue': revenue_data
+        }),
+        'retention': pd.DataFrame({
+            'date': dates_2022_2024,
+            'retention': retention_data
+        }),
+        'processing': pd.DataFrame({
+            'date': dates_2022_2024,
+            'processing_time': processing_data
+        })
+    }
 
-def get_current_url():
-    """Get the current app URL"""
-    # Try to get the actual deployed URL
-    try:
-        # Streamlit provides this in the environment
-        if hasattr(st, '_stn_current_url'):
-            return st._stn_current_url
-    except:
-        pass
+# Generate prediction data for 2025
+def generate_predictions():
+    dates_2025 = pd.date_range('2025-01-01', '2025-12-31', freq='M')
     
-    # Fallback: extract from page context
-    try:
-        from streamlit.runtime.scriptrunner import get_script_run_ctx
-        ctx = get_script_run_ctx()
-        if ctx and hasattr(ctx, 'page_name'):
-            return f"https://{ctx.page_name}.streamlit.app"
-    except:
-        pass
+    # Revenue predictions (following roadmap)
+    base_2025 = 3200000  # Starting higher due to expansion
+    revenue_pred = []
+    for i, date in enumerate(dates_2025):
+        # Accelerated growth due to European expansion and AI service
+        monthly_growth = 0.045 if i < 6 else 0.055  # Faster growth in first half
+        revenue = base_2025 * (1 + monthly_growth) ** i
+        revenue_pred.append(max(revenue, 2000000))
     
-    # Final fallback
-    return "https://meta-learning-engine-demo.streamlit.app"
+    # Retention predictions (improved with AI customer service)
+    retention_base = 0.85
+    retention_pred = []
+    for i, date in enumerate(dates_2025):
+        improvement = 0.005 * (i // 3)  # 0.5% per quarter
+        retention = min(retention_base + improvement, 0.92)
+        retention_pred.append(retention)
+    
+    # Processing predictions (optimized)
+    processing_base = 1.2
+    processing_pred = []
+    for i, date in enumerate(dates_2025):
+        optimization = 0.05 * (i // 3)  # 0.05s improvement per quarter
+        processing_time = max(processing_base - optimization, 0.8)
+        processing_pred.append(processing_time)
+    
+    return {
+        'revenue_pred': pd.DataFrame({
+            'date': dates_2025,
+            'revenue': revenue_pred
+        }),
+        'retention_pred': pd.DataFrame({
+            'date': dates_2025,
+            'retention': retention_pred
+        }),
+        'processing_pred': pd.DataFrame({
+            'date': dates_2025,
+            'processing_time': processing_pred
+        })
+    }
 
-def run_analysis_with_progress():
-    """Run analysis with progress updates"""
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    def progress_callback(message):
-        status_text.text(message)
-        # Simulate progress
-        current_progress = progress_bar.progress_value
-        progress_bar.progress(min(current_progress + 0.1, 1.0))
-    
-    try:
-        status_text.text("Initializing Meta-Learning Engine...")
-        progress_bar.progress(0.1)
-        
-        # Create and run the system
-        system = create_meta_learning_system()
-        result = system.run_full_analysis(progress_callback)
-        
-        progress_bar.progress(1.0)
-        status_text.text("Analysis Complete!")
-        
-        return result
-        
-    except Exception as e:
-        progress_bar.progress(1.0)
-        status_text.text(f"Error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'llm_response': {'llm_response': f"Analysis failed: {str(e)}"}
-        }
-
-# Main Header
-st.markdown("""
-<div class="command-center">
-    <h1>🚀 META-LEARNING ENGINE DASHBOARD</h1>
-    <p>AI-Powered Business Intelligence Platform</p>
-    <p><strong>Processing 13 Data Streams Across 3 Specialized Engines</strong></p>
-</div>
-""", unsafe_allow_html=True)
-
-# Initialize session state for analysis results
-if 'analysis_results' not in st.session_state:
-    st.session_state['analysis_results'] = None
-
-# Sidebar for navigation
-with st.sidebar:
-    st.title("🛠️ Control Panel")
-    
-    # System Status
-    st.subheader("📊 System Status")
-    st.success("🟢 All Engines Online")
-    
-    if st.session_state['analysis_results'] and st.session_state['analysis_results'].get('success'):
-        combined_data = st.session_state['analysis_results']['combined_data']
-        metadata = combined_data['combined_metadata']
-        st.metric("Processing Speed", "2.3s avg")
-        st.metric("Success Rate", f"{metadata['overall_data_quality']:.1%}")
-        st.metric("Engines Processed", metadata['engines_processed'])
-        st.metric("Slots Analyzed", metadata['total_slots'])
-    else:
-        st.metric("Processing Speed", "Ready")
-        st.metric("Success Rate", "100% (Demo)")
-        st.metric("Engines Processed", "3")
-        st.metric("Slots Analyzed", "13")
-    
-    # QR Code Generator
-    st.subheader("📱 Share Your App")
-    
-    # Get current URL dynamically
-    current_url = get_current_url()
-    
-    if st.button("Generate QR Code"):
-        try:
-            qr_img_bytes, error = generate_qr_code_safe(current_url)
+# AI Response Engine
+def get_ai_response(question):
+    if not RAG_AVAILABLE or not RAG_SYSTEM:
+        # Pre-defined intelligent responses
+        responses = {
+            "📈 What's our biggest revenue opportunity this quarter?": 
+            "Based on your Q4 data showing 127% target achievement, expanding to European markets presents a $3.2M opportunity with 89% confidence. Your customer retention analysis shows mobile-first users have 23% higher LTV. I recommend prioritizing European expansion and mobile app enhancement.",
             
-            if qr_img_bytes:
-                st.image(qr_img_bytes, caption="Scan to access demo", use_column_width=True)
-                
-                # Add download button
-                st.download_button(
-                    label="📥 Download QR Code",
-                    data=qr_img_bytes.getvalue(),
-                    file_name="meta_learning_demo_qr.png",
-                    mime="image/png"
-                )
-            else:
-                st.warning("📱 QR code generation not available")
-                if QRCODE_AVAILABLE:
-                    st.info("This might be a temporary issue. Try again!")
-                else:
-                    st.info("💡 To enable QR codes, add 'qrcode[pil]==7.4.2' to requirements.txt")
-                    
-        except Exception as e:
-            st.error(f"QR generation failed: {str(e)}")
-    
-    # Show URL
-    st.markdown(f"**Current URL:**")
-    st.code(current_url)
-    
-    # Copy URL button
-    if st.button("📋 Copy URL"):
-        try:
-            # Copy to clipboard functionality
-            st.success("✅ URL copied! Share it anywhere.")
-        except:
-            st.info("📋 Manual copy: " + current_url)
+            "🎯 Should we prioritize retention or acquisition?": 
+            "Your data shows retention improving +3% per quarter naturally. However, new customer acquisition through European expansion offers $3.2M immediate revenue vs. $800K from retention optimization. Recommendation: 70% acquisition focus (European markets), 30% retention (AI customer service deployment).",
+            
+            "⚡ How can we reduce processing time by another 30%?": 
+            "Current efficiency: 1.7s/slot (down from 2.3s in Jan 2024). To reach 30% reduction (1.2s target): 1) Deploy GPU acceleration in Q1 (40% improvement), 2) Optimize query algorithms by 15%, 3) Implement parallel processing (20% boost). Total projected: 1.1s/slot.",
+            
+            "🌍 Which market should we expand to next?": 
+            "Analysis indicates European markets offer: €3.2M Q1 revenue opportunity, 89% confidence scoring, lower competition density (-32%), favorable regulatory environment. Asia-Pacific shows €1.8M potential but higher CAC. Recommendation: European expansion Q1, Asia-Pacific Q3 2025.",
+            
+            "🤖 What AI features would maximize customer value?": 
+            "Customer behavior analysis reveals: 68% prefer mobile-first interactions, 45% abandon during complex processes, 73% value real-time insights. Priority AI features: 1) Predictive billing alerts, 2) Automated churn prevention, 3) Dynamic pricing optimization. Expected impact: +15% retention, +$1.2M annual revenue.",
+            
+            "📊 Show me the correlation between retention and revenue": 
+            "Statistical analysis shows 0.87 correlation between retention rate and revenue growth. Each 1% retention improvement generates $240K additional annual revenue. Current retention: 87% (Q4), Revenue: $2.6M/month. Projected: 89% retention → $2.8M/month (+$2.4M annual)."
+        }
+        return responses.get(question, "I'm analyzing your latest data to provide insights on this question.")
+    else:
+        return RAG_SYSTEM.get_response(question)
 
-# Main Content Area
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    # Quick Analysis Section
-    st.markdown("### 📊 Quick Analysis")
+# Main Application
+def main():
+    # Header
+    st.markdown("""
+    <div class="main-header">
+        <div class="header-welcome">🌟 INTELLIGENCE COMMAND CENTER • PREMIUM SUITE</div>
+        <div class="header-subtitle">Welcome, Director Chen    🎯 Operations Dashboard • Live</div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    upload_col1, upload_col2, upload_col3 = st.columns(3)
+    # Top 4-panel layout
+    col1, col2, col3, col4 = st.columns(4)
     
-    with upload_col1:
-        if st.button("📤 Upload CSV", use_container_width=True):
-            st.info("📁 Upload your CSV files to the demo_data/ folder")
-            st.info("📋 Expected files: customer_email_train.csv, product_reviews_train.csv, etc.")
-    
-    with upload_col2:
-        if st.button("🚀 Run Demo Analysis", use_container_width=True):
-            with st.spinner("Running Meta-Learning Engine..."):
-                result = run_analysis_with_progress()
-                st.session_state['analysis_results'] = result
-                
-                if result['success']:
+    with col1:
+        st.markdown("""
+        <div class="status-indicator">
+            <h3>🏠 HOME</h3>
+            <p><strong>Personal Hub</strong></p>
+            <p>• Quick Actions</p>
+            <p>• Personal Metrics</p>
+            <p>• Recent Activity</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🚀 Run Full Analysis", use_container_width=True):
+            with st.spinner("Initializing Meta-Learning Engine..."):
+                try:
+                    system = create_meta_learning_system()
+                    result = system.run_full_analysis()
                     st.success("✅ Analysis Complete!")
                     st.balloons()
-                else:
-                    st.error(f"❌ Analysis failed: {result.get('error', 'Unknown error')}")
+                except Exception as e:
+                    st.error(f"Analysis failed: {str(e)}")
     
-    with upload_col3:
-        if st.button("📈 View Results", use_container_width=True):
-            if st.session_state['analysis_results']:
-                st.info("📊 Displaying analysis results below...")
-            else:
-                st.warning("⚠️ Please run analysis first")
+    with col2:
+        st.markdown("""
+        <div class="status-indicator" style="border-left-color: #28a745;">
+            <h3>📊 REAL TIME</h3>
+            <p><strong>Live Dashboard</strong></p>
+            <p>Revenue: $2.4M ↗️15.2%</p>
+            <p>Today's Users: 2,147</p>
+            <p>Processing: 847 predictions</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    # Display results if available
-    if st.session_state['analysis_results'] and st.session_state['analysis_results'].get('success'):
-        st.markdown("---")
-        st.markdown("### 🎯 Latest Analysis Results")
-        
-        result = st.session_state['analysis_results']
-        llm_response = result['llm_response']
-        combined_data = result['combined_data']
-        
-        # LLM Response
-        st.markdown("#### 🤖 AI Analysis")
-        st.markdown(llm_response['llm_response'])
-        
-        # Engine Breakdown
-        st.markdown("#### 📊 Engine Performance")
-        for engine_name, summary in combined_data['engine_summaries'].items():
-            st.markdown(f"""
-            <div class="metric-card">
-                <h4>{engine_name.upper()}</h4>
-                <p><strong>Slots Processed:</strong> {summary['slots_processed']}</p>
-                <p><strong>Successful:</strong> {summary['successful_slots']}</p>
-                <p><strong>Predictions:</strong> {summary['total_predictions']}</p>
-                <p><strong>Errors:</strong> {summary['total_errors']}</p>
-                <p><strong>Quality Score:</strong> {summary['data_quality_avg']:.1%}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Results export
-        if st.button("📥 Export Full Report"):
-            try:
-                results_writer = ResultsWriter()
-                output_file = results_writer.write_results(llm_response, combined_data)
-                
-                if output_file and os.path.exists(output_file):
-                    with open(output_file, 'r', encoding='utf-8') as f:
-                        report_content = f.read()
-                    
-                    st.download_button(
-                        label="📄 Download Report",
-                        data=report_content.encode('utf-8'),
-                        file_name=f"meta_learning_analysis_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                        mime="text/plain"
-                    )
-                    st.success("✅ Report ready for download!")
-                else:
-                    st.error("❌ Failed to generate report")
-            except Exception as e:
-                st.error(f"Export failed: {str(e)}")
-
-with col2:
-    # AI Assistant Section
-    st.markdown("### 🤖 Ask the AI")
+    with col3:
+        st.markdown("""
+        <div class="status-indicator" style="border-left-color: #ffc107;">
+            <h3>🎯 SMART INSIGHTS</h3>
+            <p><strong>Analysis Hub</strong></p>
+            <p>• Q4 Forecast: $8.9M (94.3%)</p>
+            <p>• Customer Segments</p>
+            <p>• Risk Models Active</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    # Pre-defined prompt choices
-    st.markdown("**Choose a question:**")
+    with col4:
+        st.markdown("""
+        <div class="status-indicator" style="border-left-color: #dc3545;">
+            <h3>⚡ SYSTEM STATUS</h3>
+            <p><strong>All Systems Operational</strong></p>
+            <p>🟢 All 3 Engines Online</p>
+            <p>🟢 Data Quality: 97%</p>
+            <p>🔔 2 alerts pending</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    questions = [
-        "What can you analyze?",
-        "How does Engine 2 work?",
-        "What models do you use?",
-        "What data do you need?",
-        "Show me recent projects",
-        "How accurate are predictions?",
-        "What are the pricing tiers?",
-        "How to get started?"
+    # Quarter Predictions & Company Roadmap
+    st.markdown("---")
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px; text-align: center; color: white;'>
+        <h2>🎯 QUARTER PREDICTIONS & COMPANY ROADMAP</h2>
+        <p style='font-size: 1.2rem; margin: 0;'>Q4 2024 Progress: 127% of target | Q1 2025 Quota: $11.2M</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Generate data
+    business_data = generate_business_data()
+    predictions = generate_predictions()
+    
+    # Charts Section
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Revenue Chart
+        fig_revenue = go.Figure()
+        fig_revenue.add_trace(go.Scatter(
+            x=business_data['revenue']['date'],
+            y=business_data['revenue']['revenue']/1000000,
+            mode='lines+markers',
+            name='Historical Revenue',
+            line=dict(color='#667eea', width=3),
+            marker=dict(size=6)
+        ))
+        fig_revenue.add_trace(go.Scatter(
+            x=predictions['revenue_pred']['date'],
+            y=predictions['revenue_pred']['revenue']/1000000,
+            mode='lines+markers',
+            name='2025 Prediction',
+            line=dict(color='#f5576c', width=3, dash='dash'),
+            marker=dict(size=6)
+        ))
+        fig_revenue.update_layout(
+            title="Monthly Revenue: Historical vs 2025 Prediction",
+            xaxis_title="Month",
+            yaxis_title="Revenue ($ Millions)",
+            template="plotly_white",
+            height=400
+        )
+        st.plotly_chart(fig_revenue, use_container_width=True)
+    
+    with col2:
+        # Customer Retention Chart
+        fig_retention = go.Figure()
+        fig_retention.add_trace(go.Scatter(
+            x=business_data['retention']['date'],
+            y=business_data['retention']['retention']*100,
+            mode='lines+markers',
+            name='Historical Retention',
+            line=dict(color='#28a745', width=3),
+            marker=dict(size=6)
+        ))
+        fig_retention.add_trace(go.Scatter(
+            x=predictions['retention_pred']['date'],
+            y=predictions['retention_pred']['retention']*100,
+            mode='lines+markers',
+            name='2025 Prediction',
+            line=dict(color='#ffc107', width=3, dash='dash'),
+            marker=dict(size=6)
+        ))
+        fig_retention.update_layout(
+            title="Customer Retention Rate: Historical vs 2025 Prediction",
+            xaxis_title="Quarter",
+            yaxis_title="Retention Rate (%)",
+            template="plotly_white",
+            height=400
+        )
+        st.plotly_chart(fig_retention, use_container_width=True)
+    
+    # Second row of charts
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        # Processing Efficiency Chart
+        fig_processing = go.Figure()
+        fig_processing.add_trace(go.Scatter(
+            x=business_data['processing']['date'],
+            y=business_data['processing']['processing_time'],
+            mode='lines+markers',
+            name='Historical Processing Time',
+            line=dict(color='#dc3545', width=3),
+            marker=dict(size=6)
+        ))
+        fig_processing.add_trace(go.Scatter(
+            x=predictions['processing_pred']['date'],
+            y=predictions['processing_pred']['processing_time'],
+            mode='lines+markers',
+            name='2025 Target',
+            line=dict(color='#17a2b8', width=3, dash='dash'),
+            marker=dict(size=6)
+        ))
+        fig_processing.update_layout(
+            title="Processing Efficiency: Historical vs 2025 Target",
+            xaxis_title="Month",
+            yaxis_title="Processing Time (seconds)",
+            template="plotly_white",
+            height=400
+        )
+        st.plotly_chart(fig_processing, use_container_width=True)
+    
+    with col4:
+        # Key Metrics Summary
+        st.markdown("""
+        <div class="prediction-box">
+            <h3>🎯 2025 Key Targets</h3>
+            <p><strong>Revenue Goal:</strong> $45.6M/year</p>
+            <p><strong>Retention Target:</strong> 89%</p>
+            <p><strong>Processing Speed:</strong> <1.0s avg</p>
+            <p><strong>European Expansion:</strong> €3.2M Q1</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div class="metric-card">
+            <h4>📊 Current Status</h4>
+            <p><strong>Q4 Achievement:</strong> 127% of target</p>
+            <p><strong>Growth Rate:</strong> +42% YoY</p>
+            <p><strong>System Uptime:</strong> 99.7%</p>
+            <p><strong>Data Quality:</strong> 97%</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Actionable Roadmap
+    st.markdown("---")
+    st.markdown("### 🎯 ACTIONABLE ROADMAP & QUARTERLY GOALS")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 📋 BIG MOVES")
+        
+        # Big Moves with expandable details
+        big_moves = [
+            {
+                'title': '🌍 Expand to European Markets',
+                'target': 'Target: €3.2M Q1 revenue',
+                'details': 'Phase 1: Germany, France, UK markets. Expected revenue: €1.1M/month by Q2. Requirements: Localization, compliance, local partnerships. Timeline: 8 weeks to full deployment.'
+            },
+            {
+                'title': '🤖 Launch AI Customer Service',
+                'goal': 'Goal: 60% ticket reduction',
+                'details': 'Deploy conversational AI across all channels. Expected impact: 60% reduction in support tickets, 24/7 availability, 40% faster response times. Integration with existing CRM systems.'
+            },
+            {
+                'title': '💳 Implement Predictive Billing',
+                'roi': 'ROI: +25% cash flow',
+                'details': 'AI-powered billing optimization based on usage patterns. Forecast accuracy improvement from 73% to 91%. Expected cash flow improvement: $2.4M annually.'
+            }
+        ]
+        
+        for i, move in enumerate(big_moves):
+            with st.expander(f"{move['title']}"):
+                st.markdown(f"""
+                <div class="dropdown-content">
+                    <p><strong>{list(move.keys())[1].title()}:</strong> {list(move.values())[1]}</p>
+                    <p><strong>Details:</strong> {move['details']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("#### 🔧 QUICK WINS")
+        
+        quick_wins = [
+            {'task': '📊 Update dashboard analytics', 'eta': 'ETA: 2 weeks', 'details': 'Add real-time revenue tracking, customer segmentation insights, and predictive alerts. Estimated time savings: 4 hours/week.'},
+            {'task': '⚡ Optimize database queries', 'eta': 'ETA: 1 week', 'details': 'Index optimization and query restructuring. Expected 30% performance improvement, reduced server load by 25%.'},
+            {'task': '👥 Team training program', 'eta': 'ETA: 3 weeks', 'details': 'Advanced analytics and AI tools training for all team members. Expected productivity increase: 15%.'}
+        ]
+        
+        for i, win in enumerate(quick_wins):
+            with st.expander(f"{win['task']}"):
+                st.markdown(f"""
+                <div class="dropdown-content">
+                    <p><strong>{win['eta']}</strong></p>
+                    <p>{win['details']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    # AI Chat Interface
+    st.markdown("---")
+    st.markdown("### 🤖 ASK THE INTELLIGENCE ENGINE")
+    
+    # Pre-defined AI prompts
+    ai_prompts = [
+        "📈 What's our biggest revenue opportunity this quarter?",
+        "🎯 Should we prioritize retention or acquisition?",
+        "⚡ How can we reduce processing time by another 30%?",
+        "🌍 Which market should we expand to next?",
+        "🤖 What AI features would maximize customer value?",
+        "📊 Show me the correlation between retention and revenue"
     ]
     
-    # Create buttons for questions
-    for i in range(0, len(questions), 2):
-        col_q1, col_q2 = st.columns(2)
-        
-        with col_q1:
-            if st.button(questions[i], key=f"q_{i}"):
-                st.session_state['selected_question'] = questions[i]
-        
-        if i + 1 < len(questions):
-            with col_q2:
-                if st.button(questions[i + 1], key=f"q_{i+1}"):
-                    st.session_state['selected_question'] = questions[i + 1]
+    # Initialize session state for selected question
+    if 'selected_ai_question' not in st.session_state:
+        st.session_state.selected_ai_question = None
     
-    # Display answer
-    if 'selected_question' in st.session_state:
-        question = st.session_state['selected_question']
-        answer = RAG_SYSTEM.get_response(question)
+    # Display AI prompts as buttons
+    cols_per_row = 2
+    for i in range(0, len(ai_prompts), cols_per_row):
+        cols = st.columns(cols_per_row)
+        for j, prompt in enumerate(ai_prompts[i:i+cols_per_row]):
+            with cols[j]:
+                if st.button(prompt, key=f"ai_prompt_{i+j}", use_container_width=True):
+                    st.session_state.selected_ai_question = prompt
+    
+    # Display AI response
+    if st.session_state.selected_ai_question:
+        question = st.session_state.selected_ai_question
+        response = get_ai_response(question)
         
-        st.markdown("---")
-        st.markdown(f"**Q: {question}**")
-        st.markdown(f"**A: {answer}**")
+        st.markdown(f"""
+        <div class="ai-response">
+            <h4>💬 {question}</h4>
+            <p style="font-size: 1.1rem; line-height: 1.6;">{response}</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Clear selection button
-        if st.button("Clear Question"):
-            del st.session_state['selected_question']
-            st.experimental_rerun()
+        if st.button("❌ Clear Question"):
+            st.session_state.selected_ai_question = None
+            st.rerun()
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; color: #666; padding: 20px;'>
+        <p>🌟 Intelligence Command Center • Premium Suite</p>
+        <p><strong>13 Data Streams • 3 Specialized Engines • Real-time Analysis</strong></p>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Recent Results Section (simulated)
-st.markdown("### 📈 Recent Results")
-recent_results = [
-    "• Engine 2: $1.8M revenue projection",
-    "• Cost efficiency: 60% improvement", 
-    "• Customer retention: 15% increase",
-    "• ROI analysis: 280% return expected"
-]
-
-# Add actual results if analysis was run
-if st.session_state['analysis_results'] and st.session_state['analysis_results'].get('success'):
-    combined_data = st.session_state['analysis_results']['combined_data']
-    for engine_name, summary in combined_data['engine_summaries'].items():
-        recent_results.append(f"• {engine_name}: {summary['successful_slots']}/{summary['slots_processed']} slots successful")
-
-for result in recent_results:
-    st.markdown(result)
-
-# Footer
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: #666;'>
-    <p>🚀 Meta-Learning Business Intelligence Engine | Built with Streamlit</p>
-    <p><strong>13 CSV Slots • 3 Engines • OpenRouter AI • Real-time Analysis</strong></p>
-    <p><a href="https://share.streamlit.io">Deploy your own app</a></p>
-</div>
-""", unsafe_allow_html=True)
+if __name__ == "__main__":
+    main()
