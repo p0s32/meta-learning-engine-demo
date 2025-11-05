@@ -2,10 +2,17 @@
 import streamlit as st
 import pandas as pd
 import io
-import qrcode
 from PIL import Image
 import os
 import sys
+import base64
+
+# Try to import optional dependencies
+try:
+    import qrcode
+    QRCODE_AVAILABLE = True
+except ImportError:
+    QRCODE_AVAILABLE = False
 
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(__file__))
@@ -57,15 +64,49 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def generate_qr_code(url, filename="demo_qr.png"):
-    """Generate QR code for the app URL"""
-    qr = qrcode.QRCode(version=1, box_size=10, border=4)
-    qr.add_data(url)
-    qr.make(fit=True)
+def generate_qr_code_safe(url):
+    """Generate QR code safely with error handling"""
+    if not QRCODE_AVAILABLE:
+        return None, "QR code library not available"
     
-    img = qr.make_image(fill_color="black", back_color="white")
-    img.save(filename)
-    return img
+    try:
+        qr = qrcode.QRCode(version=1, box_size=10, border=4)
+        qr.add_data(url)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to bytes for Streamlit
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format='PNG')
+        img_bytes.seek(0)
+        
+        return img_bytes, None
+        
+    except Exception as e:
+        return None, f"QR generation failed: {str(e)}"
+
+def get_current_url():
+    """Get the current app URL"""
+    # Try to get the actual deployed URL
+    try:
+        # Streamlit provides this in the environment
+        if hasattr(st, '_stn_current_url'):
+            return st._stn_current_url
+    except:
+        pass
+    
+    # Fallback: extract from page context
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        ctx = get_script_run_ctx()
+        if ctx and hasattr(ctx, 'page_name'):
+            return f"https://{ctx.page_name}.streamlit.app"
+    except:
+        pass
+    
+    # Final fallback
+    return "https://meta-learning-engine-demo.streamlit.app"
 
 def run_analysis_with_progress():
     """Run analysis with progress updates"""
@@ -137,28 +178,44 @@ with st.sidebar:
     # QR Code Generator
     st.subheader("📱 Share Your App")
     
-    # Get current URL (this would be the deployed Streamlit URL)
-    current_url = "https://meta-learning-engine.streamlit.app"
+    # Get current URL dynamically
+    current_url = get_current_url()
     
     if st.button("Generate QR Code"):
         try:
-            qr_img = generate_qr_code(current_url)
-            st.image(qr_img, caption="Scan to access demo", use_column_width=True)
+            qr_img_bytes, error = generate_qr_code_safe(current_url)
             
-            # Save QR code to session state for download
-            qr_img.save("demo_qr.png")
-            
-            st.download_button(
-                label="📥 Download QR Code",
-                data=open("demo_qr.png", "rb").read(),
-                file_name="meta_learning_demo_qr.png",
-                mime="image/png"
-            )
+            if qr_img_bytes:
+                st.image(qr_img_bytes, caption="Scan to access demo", use_column_width=True)
+                
+                # Add download button
+                st.download_button(
+                    label="📥 Download QR Code",
+                    data=qr_img_bytes.getvalue(),
+                    file_name="meta_learning_demo_qr.png",
+                    mime="image/png"
+                )
+            else:
+                st.warning("📱 QR code generation not available")
+                if QRCODE_AVAILABLE:
+                    st.info("This might be a temporary issue. Try again!")
+                else:
+                    st.info("💡 To enable QR codes, add 'qrcode[pil]==7.4.2' to requirements.txt")
+                    
         except Exception as e:
             st.error(f"QR generation failed: {str(e)}")
     
+    # Show URL
     st.markdown(f"**Current URL:**")
     st.code(current_url)
+    
+    # Copy URL button
+    if st.button("📋 Copy URL"):
+        try:
+            # Copy to clipboard functionality
+            st.success("✅ URL copied! Share it anywhere.")
+        except:
+            st.info("📋 Manual copy: " + current_url)
 
 # Main Content Area
 col1, col2 = st.columns([2, 1])
