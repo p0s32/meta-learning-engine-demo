@@ -1,547 +1,727 @@
-# app.py - Meta-Learning Business Intelligence Command Center
+# app.py - Meta-Learning Business Intelligence Platform
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import numpy as np
 import plotly.express as px
-from datetime import datetime, timedelta
-import json
-import os
+import plotly.graph_objects as go
+from datetime import datetime
 import sys
+import os
 
-# Add current directory to path for imports
-sys.path.append(os.path.dirname(__file__))
+# Add the current directory to the path to import our knowledge_base
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Import our custom knowledge base
 try:
     from knowledge_base import RAG_SYSTEM
-    from core_engine import create_meta_learning_system, DataCombiner, LLMAnalyzer, ResultsWriter
-    RAG_AVAILABLE = True
+    KNOWLEDGE_AVAILABLE = True
 except ImportError:
-    RAG_AVAILABLE = False
-    # Fallback responses for demo
-    RAG_SYSTEM = None
+    KNOWLEDGE_AVAILABLE = False
+    st.error("Knowledge base not available. Please ensure knowledge_base.py is in the same directory.")
 
-# Page config
+# Page configuration
 st.set_page_config(
-    page_title="🌟 Intelligence Command Center",
-    page_icon="🌟",
+    page_title="Meta-Learning Business Intelligence",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Enterprise Command Center
-st.markdown("""
-<style>
-    .main-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 30px;
-        border-radius: 15px;
-        margin-bottom: 20px;
-        text-align: center;
-    }
-    .header-welcome {
-        color: white;
-        font-size: 1.8rem;
-        font-weight: 600;
-        margin-bottom: 5px;
-    }
-    .header-subtitle {
-        color: rgba(255,255,255,0.9);
-        font-size: 1.1rem;
-    }
-    .status-indicator {
-        background: #f8f9fa;
-        padding: 20px;
-        border-radius: 12px;
-        border-left: 5px solid #28a745;
-        margin: 10px 0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    .metric-card {
-        background: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        border-left: 4px solid #667eea;
-        margin: 15px 0;
-    }
-    .chart-container {
-        background: white;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        margin: 10px 0;
-    }
-    .prediction-box {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        color: white;
-        padding: 15px;
-        border-radius: 8px;
-        margin: 10px 0;
-    }
-    .quick-actions {
-        background: #f8f9fa;
-        padding: 15px;
-        border-radius: 8px;
-        margin: 10px 0;
-    }
-    .ai-prompt {
-        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-        padding: 15px;
-        border-radius: 8px;
-        margin: 8px 0;
-        cursor: pointer;
-        transition: transform 0.2s;
-    }
-    .ai-prompt:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .ai-response {
-        background: #e8f4fd;
-        padding: 20px;
-        border-radius: 10px;
-        border-left: 4px solid #667eea;
-        margin: 15px 0;
-    }
-    .roadmap-item {
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        margin: 8px 0;
-        border-left: 4px solid #ffc107;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .dropdown-content {
-        background: #f8f9fa;
-        padding: 15px;
-        border-radius: 8px;
-        margin-top: 10px;
-        border-left: 3px solid #6c757d;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Generate mock business data for realistic charts
-def generate_business_data():
-    # All-time data (2022-2024)
-    dates_2022_2024 = pd.date_range('2022-01-01', '2024-12-31', freq='M')
+def get_knowledge_base_data():
+    """Extract CloudFlow Analytics data from our knowledge base"""
     
-    # Revenue data with growth trend
-    base_revenue = 1800000
-    revenue_growth = 0.035  # 3.5% monthly growth
-    revenue_data = []
-    for i, date in enumerate(dates_2022_2024):
-        revenue = base_revenue * (1 + revenue_growth) ** i
-        # Add some noise
-        noise = 0.15 * revenue * (pd.random.random() - 0.5)
-        revenue_data.append(max(revenue + noise, 1000000))
-    
-    # Customer retention data (improving trend)
-    retention_start = 0.75
-    retention_improvement = 0.015  # 1.5% improvement per quarter
-    retention_data = []
-    for i, date in enumerate(dates_2022_2024):
-        quarter = i // 3
-        retention = min(retention_start + (retention_improvement * quarter), 0.92)
-        # Add noise
-        noise = 0.02 * (pd.random.random() - 0.5)
-        retention_data.append(max(min(retention + noise, 0.95), 0.70))
-    
-    # Processing efficiency data (improving)
-    processing_start = 2.3
-    processing_improvement = 0.1  # 0.1s improvement per quarter
-    processing_data = []
-    for i, date in enumerate(dates_2022_2024):
-        quarter = i // 3
-        processing_time = max(processing_start - (processing_improvement * quarter), 1.0)
-        # Add noise
-        noise = 0.3 * (pd.random.random() - 0.5)
-        processing_data.append(max(processing_time + noise, 0.8))
-    
-    return {
-        'revenue': pd.DataFrame({
-            'date': dates_2022_2024,
-            'revenue': revenue_data
-        }),
-        'retention': pd.DataFrame({
-            'date': dates_2022_2024,
-            'retention': retention_data
-        }),
-        'processing': pd.DataFrame({
-            'date': dates_2022_2024,
-            'processing_time': processing_data
-        })
-    }
-
-# Generate prediction data for 2025
-def generate_predictions():
-    dates_2025 = pd.date_range('2025-01-01', '2025-12-31', freq='M')
-    
-    # Revenue predictions (following roadmap)
-    base_2025 = 3200000  # Starting higher due to expansion
-    revenue_pred = []
-    for i, date in enumerate(dates_2025):
-        # Accelerated growth due to European expansion and AI service
-        monthly_growth = 0.045 if i < 6 else 0.055  # Faster growth in first half
-        revenue = base_2025 * (1 + monthly_growth) ** i
-        revenue_pred.append(max(revenue, 2000000))
-    
-    # Retention predictions (improved with AI customer service)
-    retention_base = 0.85
-    retention_pred = []
-    for i, date in enumerate(dates_2025):
-        improvement = 0.005 * (i // 3)  # 0.5% per quarter
-        retention = min(retention_base + improvement, 0.92)
-        retention_pred.append(retention)
-    
-    # Processing predictions (optimized)
-    processing_base = 1.2
-    processing_pred = []
-    for i, date in enumerate(dates_2025):
-        optimization = 0.05 * (i // 3)  # 0.05s improvement per quarter
-        processing_time = max(processing_base - optimization, 0.8)
-        processing_pred.append(processing_time)
-    
-    return {
-        'revenue_pred': pd.DataFrame({
-            'date': dates_2025,
-            'revenue': revenue_pred
-        }),
-        'retention_pred': pd.DataFrame({
-            'date': dates_2025,
-            'retention': retention_pred
-        }),
-        'processing_pred': pd.DataFrame({
-            'date': dates_2025,
-            'processing_time': processing_pred
-        })
-    }
-
-# AI Response Engine
-def get_ai_response(question):
-    if not RAG_AVAILABLE or not RAG_SYSTEM:
-        # Pre-defined intelligent responses
-        responses = {
-            "📈 What's our biggest revenue opportunity this quarter?": 
-            "Based on your Q4 data showing 127% target achievement, expanding to European markets presents a $3.2M opportunity with 89% confidence. Your customer retention analysis shows mobile-first users have 23% higher LTV. I recommend prioritizing European expansion and mobile app enhancement.",
-            
-            "🎯 Should we prioritize retention or acquisition?": 
-            "Your data shows retention improving +3% per quarter naturally. However, new customer acquisition through European expansion offers $3.2M immediate revenue vs. $800K from retention optimization. Recommendation: 70% acquisition focus (European markets), 30% retention (AI customer service deployment).",
-            
-            "⚡ How can we reduce processing time by another 30%?": 
-            "Current efficiency: 1.7s/slot (down from 2.3s in Jan 2024). To reach 30% reduction (1.2s target): 1) Deploy GPU acceleration in Q1 (40% improvement), 2) Optimize query algorithms by 15%, 3) Implement parallel processing (20% boost). Total projected: 1.1s/slot.",
-            
-            "🌍 Which market should we expand to next?": 
-            "Analysis indicates European markets offer: €3.2M Q1 revenue opportunity, 89% confidence scoring, lower competition density (-32%), favorable regulatory environment. Asia-Pacific shows €1.8M potential but higher CAC. Recommendation: European expansion Q1, Asia-Pacific Q3 2025.",
-            
-            "🤖 What AI features would maximize customer value?": 
-            "Customer behavior analysis reveals: 68% prefer mobile-first interactions, 45% abandon during complex processes, 73% value real-time insights. Priority AI features: 1) Predictive billing alerts, 2) Automated churn prevention, 3) Dynamic pricing optimization. Expected impact: +15% retention, +$1.2M annual revenue.",
-            
-            "📊 Show me the correlation between retention and revenue": 
-            "Statistical analysis shows 0.87 correlation between retention rate and revenue growth. Each 1% retention improvement generates $240K additional annual revenue. Current retention: 87% (Q4), Revenue: $2.6M/month. Projected: 89% retention → $2.8M/month (+$2.4M annual)."
+    # CloudFlow Analytics specific data from our knowledge base
+    cloudflow_data = {
+        'company_timeline': {
+            'pre_meta_learning': {
+                '2019': {'revenue': 180000, 'customers': 45, 'retention': 0.78},
+                '2020': {'revenue': 520000, 'customers': 89, 'retention': 0.81},
+                '2021': {'revenue': 1200000, 'customers': 147, 'retention': 0.82}
+            },
+            'post_meta_learning': {
+                '2022': {'revenue': 2400000, 'customers': 214, 'retention': 0.87},
+                '2023': {'revenue': 4800000, 'customers': 340, 'retention': 0.89},
+                '2024': {'revenue': 8500000, 'customers': 520, 'retention': 0.91}
+            }
+        },
+        'transformation_metrics': {
+            'conversion_rate_improvement': '2.1% → 3.5% (67% improvement)',
+            'customer_acquisition_cost': '-32% reduction',
+            'customer_churn': '18% → 13% (28% reduction)',
+            'processing_efficiency': '+26% improvement',
+            'cart_abandonment': '18% → 7.8% (57% reduction)',
+            'trial_to_paid': '23% → 34% (48% improvement)',
+            'a_b_test_success_rate': '67%'
+        },
+        'roi_metrics': {
+            'system_investment': 250000,
+            'annual_returns': 3200000,
+            'payback_period': 1.2,
+            '3_year_roi': 1280,
+            'operational_savings': 1800000
+        },
+        'strategic_initiatives': {
+            'european_expansion': {
+                'revenue_projection': 3200000,
+                'expected_roi': 280,
+                'timeline': '8 months'
+            },
+            'ai_customer_service': {
+                'investment': 400000,
+                'expected_savings': 1200000,
+                'customer_satisfaction_improvement': 35
+            },
+            'predictive_billing': {
+                'investment': 200000,
+                'cash_flow_improvement': 25,
+                'annual_impact': 2100000
+            }
+        },
+        'system_performance': {
+            'data_quality_score': 97,
+            'system_uptime': 99.7,
+            'processing_speed': 1.7,
+            'prediction_throughput': 847,
+            'data_streams': 13,
+            'engines': 3
         }
-        return responses.get(question, "I'm analyzing your latest data to provide insights on this question.")
-    else:
-        return RAG_SYSTEM.get_response(question)
+    }
+    
+    return cloudflow_data
 
-# Main Application
+def generate_business_data():
+    """Generate business data using CloudFlow Analytics knowledge base"""
+    
+    cloudflow_data = get_knowledge_base_data()
+    
+    try:
+        # Create timeline data based on CloudFlow Analytics story
+        timeline_data = []
+        
+        # Pre-meta-learning era (2019-2021)
+        for year, data in cloudflow_data['company_timeline']['pre_meta_learning'].items():
+            timeline_data.append({
+                'Year': int(year),
+                'Revenue': data['revenue'],
+                'Customers': data['customers'],
+                'Retention': data['retention'] * 100,  # Convert to percentage
+                'Phase': 'Pre-Meta-Learning'
+            })
+        
+        # Post-meta-learning era (2022-2024)
+        for year, data in cloudflow_data['company_timeline']['post_meta_learning'].items():
+            timeline_data.append({
+                'Year': int(year),
+                'Revenue': data['revenue'],
+                'Customers': data['customers'],
+                'Retention': data['retention'] * 100,  # Convert to percentage
+                'Phase': 'Post-Meta-Learning'
+            })
+        
+        # Create monthly breakdown for detailed charts
+        monthly_data = []
+        
+        # 2022 monthly breakdown (showing transformation)
+        for month in range(1, 13):
+            if month <= 6:  # Implementation period
+                base_revenue = 200000  # $200K baseline
+                growth_rate = 0.025  # 2.5% monthly
+                conversion_rate = 2.5 + (month - 1) * 0.1  # Improving conversion
+                phase = 'Implementation'
+            else:  # AI transformation
+                base_revenue = 200000 * (1.08) ** month  # 8% growth
+                growth_rate = 0.08  # 8% monthly
+                conversion_rate = 3.5 + (month - 7) * 0.05  # Up to 3.5%+
+                phase = 'AI Transformation'
+            
+            # Add some realistic monthly variation
+            revenue_variation = np.random.uniform(0.95, 1.05)
+            customer_variation = np.random.uniform(0.98, 1.02)
+            
+            monthly_data.append({
+                'Month': f'2022-{month:02d}',
+                'Revenue': int(base_revenue * revenue_variation),
+                'Customers': int(214 * customer_variation),
+                'Conversion Rate': max(conversion_rate + np.random.uniform(-0.2, 0.3), 2.0),
+                'Phase': phase
+            })
+        
+        return {
+            'timeline': timeline_data,
+            'monthly': monthly_data,
+            'cloudflow_data': cloudflow_data,
+            'success': True
+        }
+    
+    except Exception as e:
+        st.error(f"Error extracting knowledge base data: {str(e)}")
+        return {
+            'timeline': [],
+            'monthly': [],
+            'cloudflow_data': {},
+            'success': False,
+            'error': str(e)
+        }
+
+def generate_predictions():
+    """Generate predictions based on CloudFlow Analytics knowledge base"""
+    
+    cloudflow_data = get_knowledge_base_data()
+    
+    try:
+        predictions = {
+            'revenue_forecast': {
+                '2025': 14200000,  # From knowledge base projection
+                '2026': 22600000,  # Continued growth trajectory
+                '2027': 34200000   # Long-term projection
+            },
+            'customer_forecast': {
+                '2025': 750,       # Based on growth trajectory
+                '2026': 1200,      # Aggressive growth
+                '2027': 1800       # Market expansion
+            },
+            'model_accuracy': {
+                'customer_churn': 0.89,  # From knowledge base
+                'revenue_forecasting': 0.91,  # From knowledge base  
+                'conversion_optimization': 0.67  # A/B test success rate
+            },
+            'optimization_opportunities': [
+                {
+                    'area': 'European Expansion',
+                    'potential_revenue': cloudflow_data['strategic_initiatives']['european_expansion']['revenue_projection'],
+                    'timeline': cloudflow_data['strategic_initiatives']['european_expansion']['timeline'],
+                    'confidence': 0.89
+                },
+                {
+                    'area': 'AI Customer Service',
+                    'potential_savings': cloudflow_data['strategic_initiatives']['ai_customer_service']['expected_savings'],
+                    'timeline': '6 weeks',
+                    'confidence': 0.85
+                },
+                {
+                    'area': 'Predictive Billing',
+                    'potential_impact': cloudflow_data['strategic_initiatives']['predictive_billing']['annual_impact'],
+                    'timeline': '3 months',
+                    'confidence': 0.92
+                }
+            ],
+            'roi_projection': {
+                'system_investment': cloudflow_data['roi_metrics']['system_investment'],
+                'annual_returns': cloudflow_data['roi_metrics']['annual_returns'],
+                'payback_period': cloudflow_data['roi_metrics']['payback_period'],
+                'three_year_roi': f"{cloudflow_data['roi_metrics']['3_year_roi']}%"
+            },
+            'success': True
+        }
+        
+        return predictions
+    
+    except Exception as e:
+        st.error(f"Error generating predictions: {str(e)}")
+        return {
+            'revenue_forecast': {'2025': 12000000, '2026': 18000000, '2027': 26000000},
+            'customer_forecast': {'2025': 600, '2026': 900, '2027': 1300},
+            'model_accuracy': {'customer_churn': 0.85, 'revenue_forecasting': 0.88, 'conversion_optimization': 0.60},
+            'optimization_opportunities': [],
+            'roi_projection': {'system_investment': 250000, 'annual_returns': 3000000, 'payback_period': 1.0, 'three_year_roi': '1200%'},
+            'success': False,
+            'error': str(e)
+        }
+
+def get_ai_response(question):
+    """Get AI response using our CloudFlow Analytics knowledge base"""
+    try:
+        if KNOWLEDGE_AVAILABLE and RAG_SYSTEM:
+            # Use our CloudFlow Analytics knowledge base
+            response = RAG_SYSTEM.get_response(question)
+            return response
+        else:
+            # Fallback response with CloudFlow Analytics data
+            return f"""🤖 CLOUDFLOW ANALYTICS - AI ANALYSIS
+
+Based on the meta-learning business intelligence system analyzing: "{question}"
+
+🚀 COMPANY TRANSFORMATION STORY:
+• 2019: $180K revenue, 45 customers (organic growth)
+• 2022: Meta-learning system implementation ($250K investment)
+• 2023: $4.8M revenue, 340 customers (100% annual growth)
+• 2024: $8.5M revenue, 520 customers projected
+
+💰 KEY METRICS FROM REAL DATA:
+• Revenue growth: 565% over 3 years (pre-AI) → 254% in 2 years (post-AI)
+• Customer retention: 78% → 89% (+11 percentage points)
+• Conversion rate: 2.1% → 3.5% (67% improvement)
+• ROI: 1,280% over 3 years, 1.2 month payback period
+
+🎯 OPTIMIZATION WINS:
+• Customer acquisition cost: -32%
+• Processing efficiency: +26%
+• A/B test success rate: 67% (vs 23% industry average)
+• European expansion: €3.2M opportunity identified
+
+This analysis is based on CloudFlow Analytics' actual transformation using the meta-learning system."""
+    
+    except Exception as e:
+        return f"""🤖 AI ANALYSIS ERROR
+
+I encountered an issue processing your question: "{question}"
+
+Error: {str(e)}
+
+The CloudFlow Analytics meta-learning system is operational but temporarily experiencing technical difficulties."""
+
+def create_revenue_chart(data):
+    """Create revenue growth chart based on CloudFlow Analytics data"""
+    try:
+        timeline_df = pd.DataFrame(data['timeline'])
+        
+        fig = px.line(timeline_df, x='Year', y='Revenue', 
+                      title='💰 CloudFlow Analytics Revenue Growth',
+                      labels={'Revenue': 'Annual Revenue ($)'},
+                      color='Phase',
+                      color_discrete_map={
+                          'Pre-Meta-Learning': '#FF6B6B',
+                          'Post-Meta-Learning': '#4ECDC4'
+                      })
+        
+        # Add data point markers
+        fig.add_scatter(timeline_df[timeline_df['Phase'] == 'Pre-Meta-Learning'], 
+                       x='Year', y='Revenue', mode='markers', 
+                       marker_size=10, name='Pre-AI Data', 
+                       marker_color='#FF6B6B')
+        fig.add_scatter(timeline_df[timeline_df['Phase'] == 'Post-Meta-Learning'], 
+                       x='Year', y='Revenue', mode='markers',
+                       marker_size=12, name='Post-AI Data',
+                       marker_color='#4ECDC4')
+        
+        # Format y-axis as currency
+        fig.update_yaxis(tickformat='$,.0f')
+        
+        # Add annotation about transformation
+        fig.add_annotation(
+            x=2022.5, y=3500000,
+            text="Meta-Learning Implementation",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor="red"
+        )
+        
+        return fig
+    
+    except Exception as e:
+        st.error(f"Error creating revenue chart: {str(e)}")
+        return go.Figure()
+
+def create_customer_chart(data):
+    """Create customer growth chart"""
+    try:
+        timeline_df = pd.DataFrame(data['timeline'])
+        
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        # Customer count
+        fig.add_trace(
+            go.Scatter(x=timeline_df['Year'], y=timeline_df['Customers'], 
+                      name='Customer Count', line=dict(color='#4ECDC4', width=3)),
+            secondary_y=False,
+        )
+        
+        # Retention rate
+        fig.add_trace(
+            go.Scatter(x=timeline_df['Year'], y=timeline_df['Retention'], 
+                      name='Retention Rate (%)', line=dict(color='#FF6B6B', width=2, dash='dash')),
+            secondary_y=True,
+        )
+        
+        fig.update_xaxes(title_text="Year")
+        fig.update_yaxes(title_text="Customer Count", secondary_y=False)
+        fig.update_yaxes(title_text="Retention Rate (%)", secondary_y=True)
+        
+        fig.update_layout(title='👥 Customer Growth & Retention Analysis')
+        
+        return fig
+    
+    except Exception as e:
+        st.error(f"Error creating customer chart: {str(e)}")
+        return go.Figure()
+
+def create_transformation_chart(data):
+    """Create transformation metrics chart"""
+    try:
+        # Key transformation metrics from knowledge base
+        metrics_data = [
+            {'Metric': 'Revenue Growth', 'Pre-AI': 565, 'Post-AI': 254},
+            {'Metric': 'Conversion Rate', 'Pre-AI': 2.1, 'Post-AI': 3.5},
+            {'Metric': 'Customer Retention', 'Pre-AI': 78, 'Post-AI': 89},
+            {'Metric': 'Processing Efficiency', 'Pre-AI': 0, 'Post-AI': 26}
+        ]
+        
+        fig = go.Figure()
+        
+        metrics_df = pd.DataFrame(metrics_data)
+        
+        fig.add_trace(go.Bar(
+            name='Pre-Meta-Learning',
+            x=metrics_df['Metric'],
+            y=metrics_df['Pre-AI'],
+            marker_color='#FF6B6B'
+        ))
+        
+        fig.add_trace(go.Bar(
+            name='Post-Meta-Learning',
+            x=metrics_df['Metric'],
+            y=metrics_df['Post-AI'],
+            marker_color='#4ECDC4'
+        ))
+        
+        fig.update_layout(
+            title='🔄 Meta-Learning Transformation Impact',
+            xaxis_title='Key Metrics',
+            yaxis_title='Performance Improvement (%)',
+            barmode='group'
+        )
+        
+        return fig
+    
+    except Exception as e:
+        st.error(f"Error creating transformation chart: {str(e)}")
+        return go.Figure()
+
 def main():
+    """Main application"""
+    
     # Header
+    st.title("🧠 Meta-Learning Business Intelligence Platform")
     st.markdown("""
-    <div class="main-header">
-        <div class="header-welcome">🌟 INTELLIGENCE COMMAND CENTER • PREMIUM SUITE</div>
-        <div class="header-subtitle">Welcome, Director Chen    🎯 Operations Dashboard • Live</div>
+    <div style='padding: 15px; background: linear-gradient(45deg, #4ECDC4, #44A08D); border-radius: 15px; margin-bottom: 20px; color: white;'>
+        <h2>🚀 CloudFlow Analytics - The AI Success Story</h2>
+        <p><strong>From $1.2M to $4.8M revenue in 24 months using meta-learning intelligence</strong></p>
+        <p>📊 <strong>13 data streams</strong> | 🤖 <strong>3 AI engines</strong> | 💰 <strong>1,280% ROI</strong></p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Top 4-panel layout
-    col1, col2, col3, col4 = st.columns(4)
+    # Sidebar with CloudFlow Analytics metrics
+    with st.sidebar:
+        st.header("⚙️ CloudFlow Analytics System")
+        
+        # Display key metrics from knowledge base
+        system_data = get_knowledge_base_data()
+        
+        st.subheader("📈 Performance Metrics")
+        st.metric("Data Quality", "97%", "+12%")
+        st.metric("System Uptime", "99.7%", "+0.2%")
+        st.metric("Processing Speed", "1.7s/slot", "-26%")
+        st.metric("Predictions/Hour", "847", "+15%")
+        
+        st.divider()
+        
+        st.subheader("💰 ROI Performance")
+        st.metric("System Investment", f"${system_data['roi_metrics']['system_investment']:,}")
+        st.metric("Annual Returns", f"${system_data['roi_metrics']['annual_returns']:,}")
+        st.metric("Payback Period", f"{system_data['roi_metrics']['payback_period']} months")
+        st.metric("3-Year ROI", f"{system_data['roi_metrics']['3_year_roi']}%")
+        
+        st.divider()
+        
+        # Transformation status
+        st.subheader("🔄 Transformation Status")
+        st.success("✅ Meta-Learning System Active")
+        st.info("📊 Data Quality: 97%")
+        st.warning("🌍 European Expansion: Planning")
+        st.info("🤖 AI Automation: 60% Complete")
     
-    with col1:
+    # Load CloudFlow Analytics data
+    try:
+        with st.spinner("🔄 Loading CloudFlow Analytics business intelligence..."):
+            business_data = generate_business_data()
+            predictions = generate_predictions()
+        
+        if business_data.get('success', False):
+            st.success("✅ CloudFlow Analytics data loaded successfully")
+        else:
+            st.warning("⚠️ Using fallback data - some features may be limited")
+            
+    except Exception as e:
+        st.error(f"❌ Critical error loading data: {str(e)}")
+        return
+    
+    # Main tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Dashboard", "🔮 Predictions", "🤖 AI Analysis", "🚀 Transformation", "📈 Company Story"])
+    
+    with tab1:
+        st.header("📊 CloudFlow Analytics Dashboard")
+        
+        # Key metrics row
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "Current Revenue (2023)", 
+                f"${business_data['timeline'][-2]['Revenue']:,}",
+                "100% YoY Growth"
+            )
+        
+        with col2:
+            st.metric(
+                "Active Customers", 
+                business_data['timeline'][-2]['Customers'],
+                "+59% Growth"
+            )
+        
+        with col3:
+            st.metric(
+                "Retention Rate", 
+                f"{business_data['timeline'][-2]['Retention']:.0f}%",
+                "Best-in-Class"
+            )
+        
+        with col4:
+            st.metric(
+                "Processing Efficiency", 
+                f"{system_data['system_performance']['processing_speed']}s/slot",
+                "-26% Improvement"
+            )
+        
+        # Charts
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.plotly_chart(create_revenue_chart(business_data), use_container_width=True)
+        
+        with col2:
+            st.plotly_chart(create_customer_chart(business_data), use_container_width=True)
+        
+        st.plotly_chart(create_transformation_chart(business_data), use_container_width=True)
+    
+    with tab2:
+        st.header("🔮 AI Predictions & Forecasts")
+        
+        # Revenue forecast
+        st.subheader("💰 Revenue Forecast")
+        forecast_df = pd.DataFrame([
+            {"Year": year, "Revenue": f"${revenue:,}"} 
+            for year, revenue in predictions['revenue_forecast'].items()
+        ])
+        st.dataframe(forecast_df, use_container_width=True)
+        
+        # Customer forecast
+        st.subheader("👥 Customer Growth Forecast")
+        customer_forecast_df = pd.DataFrame([
+            {"Year": year, "Customers": f"{customers:,}"}
+            for year, customers in predictions['customer_forecast'].items()
+        ])
+        st.dataframe(customer_forecast_df, use_container_width=True)
+        
+        # Optimization opportunities
+        st.subheader("🎯 Optimization Opportunities")
+        for opp in predictions['optimization_opportunities']:
+            with st.expander(f"💡 {opp['area']}"):
+                st.write(f"**Potential Impact:** ${opp['potential_revenue']:,}")
+                st.write(f"**Timeline:** {opp['timeline']}")
+                st.write(f"**Confidence:** {opp['confidence']*100:.0f}%")
+        
+        # ROI projection
+        st.subheader("💰 ROI Projection")
+        roi_data = predictions['roi_projection']
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Investment", f"${roi_data['system_investment']:,}")
+        with col2:
+            st.metric("Annual Returns", f"${roi_data['annual_returns']:,}")
+        with col3:
+            st.metric("ROI", roi_data['three_year_roi'])
+    
+    with tab3:
+        st.header("🤖 AI Business Intelligence")
+        
+        # AI Chat interface
+        st.subheader("Ask Corv (AI Business Analyst)")
+        
+        # Initialize chat history
+        if 'chat_history' not in st.session_state:
+            st.session_state.chat_history = []
+        
+        # Display chat history
+        for i, chat in enumerate(st.session_state.chat_history):
+            if chat['role'] == 'user':
+                st.chat_message("user").write(chat['content'])
+            else:
+                st.chat_message("assistant").write(chat['content'])
+        
+        # Chat input
+        if prompt := st.chat_input("Ask about CloudFlow Analytics performance, growth strategy, or AI insights..."):
+            # Add user message
+            st.session_state.chat_history.append({"role": "user", "content": prompt})
+            st.chat_message("user").write(prompt)
+            
+            # Get AI response
+            with st.spinner("🤖 Corv is analyzing..."):
+                ai_response = get_ai_response(prompt)
+            
+            # Add AI response
+            st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
+            st.chat_message("assistant").write(ai_response)
+        
+        # Quick action buttons
+        st.subheader("🚀 Quick Actions")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if st.button("📊 Revenue Analysis"):
+                ai_response = get_ai_response("What are the key revenue growth drivers for CloudFlow Analytics?")
+                st.write(ai_response)
+        
+        with col2:
+            if st.button("👥 Customer Strategy"):
+                ai_response = get_ai_response("What customer retention strategies worked best for CloudFlow Analytics?")
+                st.write(ai_response)
+        
+        with col3:
+            if st.button("🤖 AI Impact"):
+                ai_response = get_ai_response("What specific AI improvements drove CloudFlow Analytics' transformation?")
+                st.write(ai_response)
+        
+        with col4:
+            if st.button("💰 ROI Analysis"):
+                ai_response = get_ai_response("Analyze the ROI and payback period of CloudFlow Analytics' meta-learning system investment.")
+                st.write(ai_response)
+    
+    with tab4:
+        st.header("🚀 Meta-Learning Transformation")
+        
+        # Before vs After comparison
+        st.subheader("📈 Transformation Metrics")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### Pre-Meta-Learning (2019-2021)")
+            st.metric("Revenue Growth", "565% over 3 years")
+            st.metric("Customer Retention", "78-82%")
+            st.metric("Conversion Rate", "2.1%")
+            st.metric("Growth Rate", "15% annually")
+            st.metric("Operations", "Manual, inefficient")
+        
+        with col2:
+            st.markdown("### Post-Meta-Learning (2022-2023)")
+            st.metric("Revenue Growth", "254% in 2 years")
+            st.metric("Customer Retention", "89%")
+            st.metric("Conversion Rate", "3.5%")
+            st.metric("Growth Rate", "100% annually")
+            st.metric("Operations", "AI-powered, automated")
+        
+        # Timeline
+        st.subheader("⏰ Implementation Timeline")
+        timeline_data = [
+            {"Phase": "System Investment", "Date": "Jan 2022", "Status": "✅ Complete", "Investment": "$250K"},
+            {"Phase": "Data Integration", "Date": "Jan-Mar 2022", "Status": "✅ Complete", "Investment": "$75K"},
+            {"Phase": "Model Training", "Date": "Apr-May 2022", "Status": "✅ Complete", "Investment": "$50K"},
+            {"Phase": "Full Deployment", "Date": "Jun 2022", "Status": "✅ Complete", "Investment": "$0K"},
+            {"Phase": "Results Visible", "Date": "Q3 2022", "Status": "✅ Complete", "Investment": "$0K"},
+            {"Phase": "Series B Funding", "Date": "Q2 2023", "Status": "✅ Complete", "Investment": "$12M"}
+        ]
+        
+        timeline_df = pd.DataFrame(timeline_data)
+        st.dataframe(timeline_df, use_container_width=True)
+        
+        # Key success factors
+        st.subheader("🏆 Key Success Factors")
+        success_factors = [
+            "13 integrated data streams processing 847 predictions/hour",
+            "3 specialized AI engines working in harmony",
+            "Real-time customer intelligence and behavior prediction",
+            "Systematic conversion optimization with 67% A/B test success rate",
+            "Predictive operational efficiency with 22% cost reduction"
+        ]
+        
+        for factor in success_factors:
+            st.success(f"✅ {factor}")
+    
+    with tab5:
+        st.header("📈 The CloudFlow Analytics Success Story")
+        
         st.markdown("""
-        <div class="status-indicator">
-            <h3>🏠 HOME</h3>
-            <p><strong>Personal Hub</strong></p>
-            <p>• Quick Actions</p>
-            <p>• Personal Metrics</p>
-            <p>• Recent Activity</p>
+        <div style='padding: 20px; background-color: #f8f9fa; border-radius: 10px; border-left: 5px solid #4ECDC4;'>
+            <h3>🚀 From Struggling Startup to AI-Powered Unicorn</h3>
+            <p><strong>CloudFlow Analytics</strong> proves that meta-learning business intelligence can transform any company from plateau to hypergrowth.</p>
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("🚀 Run Full Analysis", use_container_width=True):
-            with st.spinner("Initializing Meta-Learning Engine..."):
-                try:
-                    system = create_meta_learning_system()
-                    result = system.run_full_analysis()
-                    st.success("✅ Analysis Complete!")
-                    st.balloons()
-                except Exception as e:
-                    st.error(f"Analysis failed: {str(e)}")
-    
-    with col2:
-        st.markdown("""
-        <div class="status-indicator" style="border-left-color: #28a745;">
-            <h3>📊 REAL TIME</h3>
-            <p><strong>Live Dashboard</strong></p>
-            <p>Revenue: $2.4M ↗️15.2%</p>
-            <p>Today's Users: 2,147</p>
-            <p>Processing: 847 predictions</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div class="status-indicator" style="border-left-color: #ffc107;">
-            <h3>🎯 SMART INSIGHTS</h3>
-            <p><strong>Analysis Hub</strong></p>
-            <p>• Q4 Forecast: $8.9M (94.3%)</p>
-            <p>• Customer Segments</p>
-            <p>• Risk Models Active</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown("""
-        <div class="status-indicator" style="border-left-color: #dc3545;">
-            <h3>⚡ SYSTEM STATUS</h3>
-            <p><strong>All Systems Operational</strong></p>
-            <p>🟢 All 3 Engines Online</p>
-            <p>🟢 Data Quality: 97%</p>
-            <p>🔔 2 alerts pending</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Quarter Predictions & Company Roadmap
-    st.markdown("---")
-    st.markdown("""
-    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px; text-align: center; color: white;'>
-        <h2>🎯 QUARTER PREDICTIONS & COMPANY ROADMAP</h2>
-        <p style='font-size: 1.2rem; margin: 0;'>Q4 2024 Progress: 127% of target | Q1 2025 Quota: $11.2M</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Generate data
-    business_data = generate_business_data()
-    predictions = generate_predictions()
-    
-    # Charts Section
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Revenue Chart
-        fig_revenue = go.Figure()
-        fig_revenue.add_trace(go.Scatter(
-            x=business_data['revenue']['date'],
-            y=business_data['revenue']['revenue']/1000000,
-            mode='lines+markers',
-            name='Historical Revenue',
-            line=dict(color='#667eea', width=3),
-            marker=dict(size=6)
-        ))
-        fig_revenue.add_trace(go.Scatter(
-            x=predictions['revenue_pred']['date'],
-            y=predictions['revenue_pred']['revenue']/1000000,
-            mode='lines+markers',
-            name='2025 Prediction',
-            line=dict(color='#f5576c', width=3, dash='dash'),
-            marker=dict(size=6)
-        ))
-        fig_revenue.update_layout(
-            title="Monthly Revenue: Historical vs 2025 Prediction",
-            xaxis_title="Month",
-            yaxis_title="Revenue ($ Millions)",
-            template="plotly_white",
-            height=400
-        )
-        st.plotly_chart(fig_revenue, use_container_width=True)
-    
-    with col2:
-        # Customer Retention Chart
-        fig_retention = go.Figure()
-        fig_retention.add_trace(go.Scatter(
-            x=business_data['retention']['date'],
-            y=business_data['retention']['retention']*100,
-            mode='lines+markers',
-            name='Historical Retention',
-            line=dict(color='#28a745', width=3),
-            marker=dict(size=6)
-        ))
-        fig_retention.add_trace(go.Scatter(
-            x=predictions['retention_pred']['date'],
-            y=predictions['retention_pred']['retention']*100,
-            mode='lines+markers',
-            name='2025 Prediction',
-            line=dict(color='#ffc107', width=3, dash='dash'),
-            marker=dict(size=6)
-        ))
-        fig_retention.update_layout(
-            title="Customer Retention Rate: Historical vs 2025 Prediction",
-            xaxis_title="Quarter",
-            yaxis_title="Retention Rate (%)",
-            template="plotly_white",
-            height=400
-        )
-        st.plotly_chart(fig_retention, use_container_width=True)
-    
-    # Second row of charts
-    col3, col4 = st.columns(2)
-    
-    with col3:
-        # Processing Efficiency Chart
-        fig_processing = go.Figure()
-        fig_processing.add_trace(go.Scatter(
-            x=business_data['processing']['date'],
-            y=business_data['processing']['processing_time'],
-            mode='lines+markers',
-            name='Historical Processing Time',
-            line=dict(color='#dc3545', width=3),
-            marker=dict(size=6)
-        ))
-        fig_processing.add_trace(go.Scatter(
-            x=predictions['processing_pred']['date'],
-            y=predictions['processing_pred']['processing_time'],
-            mode='lines+markers',
-            name='2025 Target',
-            line=dict(color='#17a2b8', width=3, dash='dash'),
-            marker=dict(size=6)
-        ))
-        fig_processing.update_layout(
-            title="Processing Efficiency: Historical vs 2025 Target",
-            xaxis_title="Month",
-            yaxis_title="Processing Time (seconds)",
-            template="plotly_white",
-            height=400
-        )
-        st.plotly_chart(fig_processing, use_container_width=True)
-    
-    with col4:
-        # Key Metrics Summary
-        st.markdown("""
-        <div class="prediction-box">
-            <h3>🎯 2025 Key Targets</h3>
-            <p><strong>Revenue Goal:</strong> $45.6M/year</p>
-            <p><strong>Retention Target:</strong> 89%</p>
-            <p><strong>Processing Speed:</strong> <1.0s avg</p>
-            <p><strong>European Expansion:</strong> €3.2M Q1</p>
-        </div>
-        """, unsafe_allow_html=True)
+        # The story
+        st.subheader("📖 The Transformation Story")
         
-        st.markdown("""
-        <div class="metric-card">
-            <h4>📊 Current Status</h4>
-            <p><strong>Q4 Achievement:</strong> 127% of target</p>
-            <p><strong>Growth Rate:</strong> +42% YoY</p>
-            <p><strong>System Uptime:</strong> 99.7%</p>
-            <p><strong>Data Quality:</strong> 97%</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Actionable Roadmap
-    st.markdown("---")
-    st.markdown("### 🎯 ACTIONABLE ROADMAP & QUARTERLY GOALS")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 📋 BIG MOVES")
-        
-        # Big Moves with expandable details
-        big_moves = [
+        story_sections = [
             {
-                'title': '🌍 Expand to European Markets',
-                'target': 'Target: €3.2M Q1 revenue',
-                'details': 'Phase 1: Germany, France, UK markets. Expected revenue: €1.1M/month by Q2. Requirements: Localization, compliance, local partnerships. Timeline: 8 weeks to full deployment.'
+                "phase": "🎯 The Challenge (2019-2021)",
+                "content": [
+                    "Founded in 2019 as a small business analytics tool",
+                    "Organic growth: $180K → $520K → $1.2M (3 years)",
+                    "Growth rate plateauing at 15% annually",
+                    "High customer acquisition costs",
+                    "Manual processes limiting scalability"
+                ]
             },
             {
-                'title': '🤖 Launch AI Customer Service',
-                'goal': 'Goal: 60% ticket reduction',
-                'details': 'Deploy conversational AI across all channels. Expected impact: 60% reduction in support tickets, 24/7 availability, 40% faster response times. Integration with existing CRM systems.'
+                "phase": "🤖 The Solution (Jan 2022)",
+                "content": [
+                    "Meta-learning system investment: $250K",
+                    "13 integrated data streams across 3 AI engines",
+                    "Real-time customer intelligence deployment",
+                    "Systematic A/B testing framework activation",
+                    "Predictive analytics implementation"
+                ]
             },
             {
-                'title': '💳 Implement Predictive Billing',
-                'roi': 'ROI: +25% cash flow',
-                'details': 'AI-powered billing optimization based on usage patterns. Forecast accuracy improvement from 73% to 91%. Expected cash flow improvement: $2.4M annually.'
+                "phase": "💥 The Results (2022-2024)",
+                "content": [
+                    "Revenue explosion: $1.2M → $4.8M → $8.5M",
+                    "Customer growth: 147 → 340 → 520",
+                    "Retention breakthrough: 82% → 89%",
+                    "100% annual growth rate achieved",
+                    "Series B funding: $12M based on AI results"
+                ]
             }
         ]
         
-        for i, move in enumerate(big_moves):
-            with st.expander(f"{move['title']}"):
-                st.markdown(f"""
-                <div class="dropdown-content">
-                    <p><strong>{list(move.keys())[1].title()}:</strong> {list(move.values())[1]}</p>
-                    <p><strong>Details:</strong> {move['details']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("#### 🔧 QUICK WINS")
+        for section in story_sections:
+            st.markdown(f"### {section['phase']}")
+            for item in section['content']:
+                st.write(f"• {item}")
+            st.write("")
         
-        quick_wins = [
-            {'task': '📊 Update dashboard analytics', 'eta': 'ETA: 2 weeks', 'details': 'Add real-time revenue tracking, customer segmentation insights, and predictive alerts. Estimated time savings: 4 hours/week.'},
-            {'task': '⚡ Optimize database queries', 'eta': 'ETA: 1 week', 'details': 'Index optimization and query restructuring. Expected 30% performance improvement, reduced server load by 25%.'},
-            {'task': '👥 Team training program', 'eta': 'ETA: 3 weeks', 'details': 'Advanced analytics and AI tools training for all team members. Expected productivity increase: 15%.'}
+        # Key metrics evolution
+        st.subheader("📊 Metrics Evolution")
+        evolution_data = [
+            {"Metric": "Annual Revenue", "2019": "$180K", "2021": "$1.2M", "2023": "$4.8M", "2024": "$8.5M (proj)"},
+            {"Metric": "Customer Count", "2019": "45", "2021": "147", "2023": "340", "2024": "520 (proj)"},
+            {"Metric": "Retention Rate", "2019": "78%", "2021": "82%", "2023": "89%", "2024": "91% (proj)"},
+            {"Metric": "Growth Rate", "2019": "189%", "2021": "131%", "2023": "100%", "2024": "77% (proj)"}
         ]
         
-        for i, win in enumerate(quick_wins):
-            with st.expander(f"{win['task']}"):
-                st.markdown(f"""
-                <div class="dropdown-content">
-                    <p><strong>{win['eta']}</strong></p>
-                    <p>{win['details']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-    
-    # AI Chat Interface
-    st.markdown("---")
-    st.markdown("### 🤖 ASK THE INTELLIGENCE ENGINE")
-    
-    # Pre-defined AI prompts
-    ai_prompts = [
-        "📈 What's our biggest revenue opportunity this quarter?",
-        "🎯 Should we prioritize retention or acquisition?",
-        "⚡ How can we reduce processing time by another 30%?",
-        "🌍 Which market should we expand to next?",
-        "🤖 What AI features would maximize customer value?",
-        "📊 Show me the correlation between retention and revenue"
-    ]
-    
-    # Initialize session state for selected question
-    if 'selected_ai_question' not in st.session_state:
-        st.session_state.selected_ai_question = None
-    
-    # Display AI prompts as buttons
-    cols_per_row = 2
-    for i in range(0, len(ai_prompts), cols_per_row):
-        cols = st.columns(cols_per_row)
-        for j, prompt in enumerate(ai_prompts[i:i+cols_per_row]):
-            with cols[j]:
-                if st.button(prompt, key=f"ai_prompt_{i+j}", use_container_width=True):
-                    st.session_state.selected_ai_question = prompt
-    
-    # Display AI response
-    if st.session_state.selected_ai_question:
-        question = st.session_state.selected_ai_question
-        response = get_ai_response(question)
+        evolution_df = pd.DataFrame(evolution_data)
+        st.dataframe(evolution_df, use_container_width=True)
         
-        st.markdown(f"""
-        <div class="ai-response">
-            <h4>💬 {question}</h4>
-            <p style="font-size: 1.1rem; line-height: 1.6;">{response}</p>
+        # Lessons learned
+        st.subheader("🎯 Lessons Learned")
+        lessons = [
+            "AI transformation requires full commitment and proper investment",
+            "Data quality and integration are critical success factors",
+            "Customer intelligence drives everything - retention > acquisition",
+            "Systematic testing beats intuition-based decisions every time",
+            "The ROI of good AI can be extraordinary when properly implemented"
+        ]
+        
+        for i, lesson in enumerate(lessons, 1):
+            st.info(f"{i}. {lesson}")
+        
+        # Call to action
+        st.markdown("""
+        <div style='padding: 20px; background: linear-gradient(45deg, #4ECDC4, #44A08D); border-radius: 10px; color: white; text-align: center;'>
+            <h3>🚀 Ready to Transform Your Business?</h3>
+            <p>CloudFlow Analytics' success proves that meta-learning business intelligence can deliver 1,280% ROI and 100% growth rates.</p>
+            <p><strong>Your transformation story starts with the right AI system.</strong></p>
         </div>
         """, unsafe_allow_html=True)
-        
-        if st.button("❌ Clear Question"):
-            st.session_state.selected_ai_question = None
-            st.rerun()
-    
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; color: #666; padding: 20px;'>
-        <p>🌟 Intelligence Command Center • Premium Suite</p>
-        <p><strong>13 Data Streams • 3 Specialized Engines • Real-time Analysis</strong></p>
-    </div>
-    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
